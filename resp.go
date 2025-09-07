@@ -23,6 +23,10 @@ type Value struct {
 	array 	[]Value // holds all the values recieved from the arrays
 }
 
+type Writer struct {
+	writer io.Writer
+}
+
 // Reader method to contain all methods that will help us read from the buffer and store it in the Value struct
 
 type Resp struct {
@@ -146,7 +150,7 @@ func (v Value) Marshal() []byte {
 func (v Value) marshalString() []byte {
 	var bytes []byte
 	bytes = append(bytes, STRING)
-	bytes = append(bytes, v,str...)
+	bytes = append(bytes, v.str...)
 	bytes = append(bytes, '\r', '\n')
 
 	return bytes
@@ -188,4 +192,15 @@ func (v Value) marshallError() []byte {
 
 func (v Value) marshallNull() []byte {
 	return []byte("$-1\r\n")
+}
+
+func (w *Writer) Write(v Value) error {
+	var bytes = v.Marshal()
+
+	_, err := w.writer.Write(bytes)
+	if err != nil {
+		return  err
+	}
+	
+	return nil
 }
