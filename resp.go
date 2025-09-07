@@ -1,9 +1,18 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"strconv"
+)
+
 const (
 	STRING  = '+'
 	ERROR   = '-'
 	INTEGER = ':'
-	BULK    = "$"
-	ARRAY   = "*"
+	BULK    = '$'
+	ARRAY   = '*'
 )
 
 type Value struct {
@@ -25,9 +34,9 @@ func NewResp(rd io.Reader) *Resp {
 }
 
 //Reads line from the buffer 
-// method: Readline
+// method: Readline -> the bytes are read one at a time except the last two which are \r and \n
 
-func (r*Resp) readline() (line []byte, n int, err error) {
+func (r *Resp) readLine() (line []byte, n int, err error) {
 	for {
 		b, err := r.reader.ReadByte()
 		if err != nil {
@@ -41,3 +50,80 @@ func (r*Resp) readline() (line []byte, n int, err error) {
 	}
 	return line[:len(line)-2], n, nil
 }
+
+//Method: Read Integer 
+
+func (r *Resp) readInteger() (x int, n int, err error) {
+	line, n, err := r.readLine()
+	if err != nil {
+		return 0,0,err 
+	}
+	i64, err := strconv.ParseInt(string(line), 10, 64)
+	if err != nil {
+		return 0,n,err
+	}
+	return int(i64), n, nil
+}
+
+func (r *Resp) Read() (Value, error) {
+	_type, err := r.reader.ReadByte()
+
+	if err != nil {
+		return Value{}, err
+	}
+	switch _type {
+	case ARRAY:
+		return r.readArray()
+	case BULK:
+		return r.readBulk()
+	default:
+		fmt.Printf("Unknown type: %v", string(_type))
+		return Value{}, nil
+	}
+}
+// RESP ARRAY looks like *2\r\n$5\r\nhello\r\n$5\r\nworld\r\n
+func (r *Resp) readArray() (Value, error) {
+	v := Value{}
+	v.typ = "array"
+
+	length, _, err := r.readInteger()
+	if err != nil {
+		return v, err
+	}
+
+	v.array = make([]Value, length)
+	for i := 0; i < length; i++ {
+		val, err := r.Read()
+		if err != nil {
+			return v, err
+		}
+
+		// add parsed value to array
+		v.array[i] = val
+	}
+
+	return v, nil
+}
+
+func (r *Resp) readBulk() (Value, error) {
+	v := Value{}
+
+	v.typ = "bulk"
+
+	len, _, err := r.readInteger()
+	if err != nil {
+		return v, err
+	}
+
+	bulk := make([]byte, len)
+
+	r.reader.Read(bulk)
+
+	v.bulk = string(bulk)
+
+	r.readLine()
+
+	return v, nil
+}
+
+
